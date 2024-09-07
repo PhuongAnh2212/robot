@@ -15,7 +15,13 @@ volatile int leftEnCount = 0;
 volatile int rightEnCount = 0;
 int prevLeftEnCount = 0;
 int prevRightEnCount = 0;
-const int targetCount = 350 * 2 / 3; // Number of pulses for one revolution
+
+
+// Practice question 1:
+// const int targetCount = 350 * 2 / 3; // Number of pulses for one revolution
+
+// Practice question 2:
+const int targetCount = 5500;
 
 bool leftMovementComplete = false;
 bool rightMovementComplete = false;
