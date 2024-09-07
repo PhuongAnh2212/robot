@@ -13,19 +13,17 @@ int enRA = 18; // Right encoder A
 
 volatile int leftEnCount = 0;
 volatile int rightEnCount = 0;
-int prevLeftEnCount = 0;
-int prevRightEnCount = 0;
+int lastLeftCount = 0;
+int lastRightCount = 0;
 
-
-// Practice question 1:
-// const int targetCount = 350 * 2 / 3; // Number of pulses for one revolution
-
-// Practice question 2:
-const int targetCount = 5500;
+const int targetCount = 350 * 2 / 3; // Number of pulses for one revolution
 
 bool leftMovementComplete = false;
 bool rightMovementComplete = false;
 bool bothMotorsStopped = false; // Flag to ensure "Both motors stopped" is printed only once
+
+unsigned long prevMillis = 0;
+const unsigned long interval = 1000; // 1 second interval
 
 void setup() {
   Serial.begin(9600); // Initialize serial communication for debugging
@@ -56,32 +54,39 @@ void loop() {
     goForward(255); // Run both motors at the same time
   }
 
+  unsigned long currentMillis = millis();
+
+  // If one second has passed, calculate pulses
+  if (currentMillis - prevMillis >= interval) {
+    prevMillis = currentMillis;
+
+    // Calculate pulses per second for left and right motors
+    int leftPulsesThisSecond = leftEnCount - lastLeftCount;
+    int rightPulsesThisSecond = rightEnCount - lastRightCount;
+
+    // Print the pulse count for the last second
+    Serial.print("Left pulses this second: ");
+    Serial.println(leftPulsesThisSecond);
+    Serial.print("Right pulses this second: ");
+    Serial.println(rightPulsesThisSecond);
+
+    // Update the last count for the next calculation
+    lastLeftCount = leftEnCount;
+    lastRightCount = rightEnCount;
+  }
+
   // Process left motor
-  if (!leftMovementComplete && leftEnCount != prevLeftEnCount) {
-    Serial.print("Left count: ");
-    Serial.println(leftEnCount);
-
-    if (leftEnCount >= targetCount) {
-      leftMovementComplete = true;
-      stopLeftMotor();
-      Serial.println("Left motor target reached.");
-    }
-
-    prevLeftEnCount = leftEnCount;
+  if (!leftMovementComplete && leftEnCount >= targetCount) {
+    leftMovementComplete = true;
+    stopLeftMotor();
+    Serial.println("Left motor target reached.");
   }
 
   // Process right motor
-  if (!rightMovementComplete && rightEnCount != prevRightEnCount) {
-    Serial.print("Right count: ");
-    Serial.println(rightEnCount);
-
-    if (rightEnCount >= targetCount) {
-      rightMovementComplete = true;
-      stopRightMotor();
-      Serial.println("Right motor target reached.");
-    }
-
-    prevRightEnCount = rightEnCount;
+  if (!rightMovementComplete && rightEnCount >= targetCount) {
+    rightMovementComplete = true;
+    stopRightMotor();
+    Serial.println("Right motor target reached.");
   }
 
   // If both motors are done and not already stopped, stop everything and print the message once
@@ -90,9 +95,6 @@ void loop() {
     Serial.println("Both motors stopped.");
     bothMotorsStopped = true; // Set flag to prevent printing again
   }
-
-  // Delay for stability
-  delay(100);
 }
 
 void goForward(int speed) {
