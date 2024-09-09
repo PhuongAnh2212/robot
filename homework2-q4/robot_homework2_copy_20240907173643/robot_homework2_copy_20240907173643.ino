@@ -10,12 +10,14 @@ int inR2 = 11; // Right motor direction 2
 int enLA = 2;  // Left encoder A (interrupt pin)
 int enRA = 18; // Right encoder A (interrupt pin)
 
-// Define motor speeds (PWM values)
-int leftMotorSpeed = 255; // Full speed
-int rightMotorSpeed = 153; // Adjusted speed for turning
+// Motor speeds (PWM values)
+int baseSpeed = 255; // Base speed for both motors
+float wheelbase = 0.187; // Wheelbase of the robot in meters
+float radius = 1.0; // Radius of the circle in meters
 
-// Define time to move in circle (milliseconds)
-unsigned long circleTime = 10000; // 10 seconds for full circle
+// Calculated speeds
+int leftMotorSpeed;
+int rightMotorSpeed;
 
 void setup() {
   // Initialize motor control pins
@@ -32,18 +34,16 @@ void setup() {
   digitalWrite(inR1, HIGH);
   digitalWrite(inR2, LOW);
   
-  // Start motors
+  // Calculate the speeds for the motors
+  leftMotorSpeed = baseSpeed * (1 - wheelbase / (2 * radius));
+  rightMotorSpeed = baseSpeed * (1 + wheelbase / (2 * radius));
+  
+  // Set motor speeds
   analogWrite(enL, leftMotorSpeed);
   analogWrite(enR, rightMotorSpeed);
-  
-  // Delay to run the robot in a circle for the specified time
-  delay(circleTime);
-  
-  // Stop motors
-  analogWrite(enL, 0);
-  analogWrite(enR, 0);
 }
 
 void loop() {
-  // Nothing to do here
+  // The robot will continue to move in a circle until you stop it
+  // You can add code to handle stopping or adjusting behavior if needed
 }
