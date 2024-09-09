@@ -8,16 +8,13 @@ int inR2 = 11; // Right motor direction 2
 
 // Encoder pins
 int enLA = 2;  // Left encoder A (interrupt pin)
+int enLB = 3;  // Left encoder B (if used, not in this example)
 int enRA = 18; // Right encoder A (interrupt pin)
+int enRB = 19; // Right encoder B (if used, not in this example)
 
-// Motor speeds (PWM values)
-int baseSpeed = 255; // Base speed for both motors
-float wheelbase = 0.187; // Wheelbase of the robot in meters
-float radius = 1.0; // Radius of the circle in meters
-
-// Calculated speeds
-int leftMotorSpeed;
-int rightMotorSpeed;
+// Pulse counters
+volatile unsigned long leftPulseCount = 0;
+volatile unsigned long rightPulseCount = 0;
 
 void setup() {
   // Initialize motor control pins
@@ -34,16 +31,35 @@ void setup() {
   digitalWrite(inR1, HIGH);
   digitalWrite(inR2, LOW);
   
-  // Calculate the speeds for the motors
-  leftMotorSpeed = baseSpeed * (1 - wheelbase / (2 * radius));
-  rightMotorSpeed = baseSpeed * (1 + wheelbase / (2 * radius));
   
-  // Set motor speeds
-  analogWrite(enL, leftMotorSpeed);
-  analogWrite(enR, rightMotorSpeed);
+  // Initialize serial communication
+  Serial.begin(9600);
+  
+  // Attach interrupts for encoder pulses
+  attachInterrupt(digitalPinToInterrupt(enLA), countLeftPulses, RISING);
+  attachInterrupt(digitalPinToInterrupt(enRA), countRightPulses, RISING);
 }
 
 void loop() {
-  // The robot will continue to move in a circle until you stop it
-  // You can add code to handle stopping or adjusting behavior if needed
+    // Set motor speeds
+  analogWrite(enL, 150);
+  analogWrite(enR, 181.3);
+  // Print the pulse counts every second
+  Serial.print("Left Pulses: ");
+  Serial.print(leftPulseCount);
+  Serial.print(" | Right Pulses: ");
+  Serial.println(rightPulseCount);
+  
+  // Add a delay to avoid overwhelming the serial monitor
+  delay(1000); // Delay 1 second
+}
+
+void countLeftPulses() {
+  // Increment the left pulse counter
+  leftPulseCount++;
+}
+
+void countRightPulses() {
+  // Increment the right pulse counter
+  rightPulseCount++;
 }
