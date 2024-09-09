@@ -12,6 +12,8 @@ int enLB = 3;  // Left encoder B (if used, not in this example)
 int enRA = 18; // Right encoder A (interrupt pin)
 int enRB = 19; // Right encoder B (if used, not in this example)
 
+const int K = 30;  //adjust K for smooth response
+
 // Pulse counters
 volatile unsigned long leftPulseCount = 0;
 volatile unsigned long rightPulseCount = 0;
