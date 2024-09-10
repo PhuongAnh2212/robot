@@ -21,10 +21,13 @@ float rpm1 = 0;
 float rpm2 = 0;
 
 const int K = 30;  //adjust K for smooth response
-const int pulsesPerRevolution = 350 * 2 / 3; // Encoder pulses per revolution of the motor
-const int targetPulses = 4700;  // Target pulses to stop the motors
-
+// const int pulsesPerRevolution = 350 * 2 / 3; // Encoder pulses per revolution of the motor
+// const int targetPulses = 4700;  // Target pulses to stop the motors
+const float wheelbase = 0.189;  // Distance between the wheels in meters
+const float radius = 1.0;  // Radius of the circle (1 meter)
 unsigned long lastTime = 0; // To track time for RPM calculation
+const int baseSpeed = 128; // Base PWM speed
+
 const unsigned long interval = 1000; // Interval in ms for calculating RPM
 
 void setup()
@@ -53,7 +56,6 @@ void setup()
 	digitalWrite(inL2, LOW);
 
 }
-
 void loop() {
   // Every 1 second, calculate and print RPM
   unsigned long currentTime = millis();
@@ -61,42 +63,36 @@ void loop() {
     lastTime = currentTime;
     
     // Calculate RPM for left and right motors
-    rpm1 = (leftEnCount / (float)pulsesPerRevolution) * 60;  // RPM formula
-    rpm2 = (rightEnCount / (float)pulsesPerRevolution) * 60;
-    
+    rpm1 = leftEnCount / 2.0;  // Example formula
+    rpm2 = rightEnCount / 2.0;
+
     // Print RPM values
     Serial.print("Left Motor RPM: ");
     Serial.println(rpm1);
     Serial.print("Right Motor RPM: ");
     Serial.println(rpm2);
-    
-    // Print pulse counts
-    Serial.print("Left Motor Pulse Count: ");
-    Serial.println(leftEnCount);
-    Serial.print("Right Motor Pulse Count: ");
-    Serial.println(rightEnCount);
   }
 
-  // Stop the motors if either encoder reaches the target pulse count
-  if (leftEnCount >= targetPulses || rightEnCount >= targetPulses) {
-    stop();  // Stop both motors
-    Serial.println("Target reached. Motors stopped.");
-    while (true);  // Stop the program here
-  }
-
-  goForward(128); // Call to goForward function with base speed
+  // Move in a circle
+  moveInCircle(baseSpeed);
 }
 
-void goForward(int speed) {
-  // Adjust motor speeds with K-factor to compensate for differences
-  int motor_R_speed = speed + K * (leftEnCount - rightEnCount);  
+void moveInCircle(int speed) {
+  // Calculate the speeds needed for the left and right motors
+  float innerRadius = radius - (wheelbase / 2);
+  float outerRadius = radius + (wheelbase / 2);
+
+  // Set speed proportionally
+  int leftSpeed = speed * (innerRadius / radius);
+  int rightSpeed = speed * (outerRadius / radius);
 
   // Constrain motor speed to valid PWM range (0-255)
-  motor_R_speed = constrain(motor_R_speed, 0, 255);
+  leftSpeed = constrain(leftSpeed, 0, 255);
+  rightSpeed = constrain(rightSpeed, 0, 255);
   
   // Set motor speeds
-  analogWrite(enL, speed);
-  analogWrite(enR, motor_R_speed);
+  analogWrite(enL, leftSpeed);
+  analogWrite(enR, rightSpeed);
 
   // Turn on motors to go forward
   digitalWrite(inL1, HIGH);
@@ -114,17 +110,10 @@ void stop() {
 }
 
 // Interrupt Service Routines (ISRs) for counting encoder pulses
-void leftEnISRA() {
+void leftEnISR() {
   leftEnCount++;
 }
 
-void leftEnISRB() {
-  leftEnCount++;
-}
-void rightEnISRA() {
-  rightEnCount++;
-}
-
-void rightEnISRB() {
+void rightEnISR() {
   rightEnCount++;
 }
