@@ -9,29 +9,33 @@ int inR2 = 11; // Right motor direction 2
 // For encoder
 int enLA = 2;
 int enLB = 3;
-
 int enRA = 18;
 int enRB = 19;
-long inner_target = 9100;
-long outer_target = 11000;
+
+// Target encoder counts
+long inner_target = 15000; // Target encoder counts for the inner wheel
+long outer_target = 18000; // Target encoder counts for the outer wheel
 
 // Robot parameters
 float wheelbase = 0.189; // Wheelbase of the robot in meters
 float radius = 1.0; // Radius of the circular path in meters
 float baseSpeed = 150; // Speed of the robot’s center in PWM
-const int K = 30;
+const int K = 30; // Proportional gain
+
 // Calculated speeds
 int leftMotorSpeed;
 int rightMotorSpeed;
 volatile long rightEnCount = 0;
-volatile long leftEnCount = 0; 
+volatile long leftEnCount = 0;
 
-
+long tmpleft = 0;
+long tmpright = 0;
 void setup() {
+  Serial.begin(9600);
 
+  // Setup interrupts
   attachInterrupt(digitalPinToInterrupt(enLA), leftEnISRA, RISING);
   attachInterrupt(digitalPinToInterrupt(enLB), leftEnISRB, RISING);
-
   attachInterrupt(digitalPinToInterrupt(enRA), rightEnISRA, RISING);
   attachInterrupt(digitalPinToInterrupt(enRB), rightEnISRB, RISING);
   
@@ -42,54 +46,49 @@ void setup() {
   pinMode(enR, OUTPUT);
   pinMode(inR1, OUTPUT);
   pinMode(inR2, OUTPUT);
-  
-  // Initialize Serial communication
-  Serial.begin(9600);
 }
 
 void loop() {
+  tmpleft = tmpleft + leftEnCount;
+  tmpright = tmpright + rightEnCount;
   rightEnCount = 0;
   leftEnCount = 0;
-
   
-   // Calculate wheel speeds for a circular path
-  float V_center = baseSpeed; // Center speed for the robot
-  //leftMotorSpeed = V_center * (1 + wheelbase / (2 * radius));
-  //rightMotorSpeed = V_center * (1 - wheelbase / (2 * radius));
-  //rightMotorSpeed = V_center * ((radius - (wheelbase / 2))/ radius);
-  //leftMotorSpeed = V_center * radius * (1 + (wheelbase / 2));
+  // Calculate wheel speeds for a circular path
+  leftMotorSpeed = 180; // Example value; adjust as needed
 
-  leftMotorSpeed = 180;
-
+  // Adjust right motor speed
   const float turnWeight = 0.7;
-   Serial.println(leftEnCount);
-  Serial.println(rightEnCount);
-  rightMotorSpeed = turnWeight*leftMotorSpeed + K*(turnWeight*rightEnCount-leftEnCount);  
-  //int motor_R_speed = turnWeight*baseSpeed + K*(turnWeight*leftEnCount-rightEnCount);  
-  //analogWrite(enR, motor_R_speed);
-  
+  rightMotorSpeed = turnWeight * leftMotorSpeed + K * (turnWeight * rightEnCount - leftEnCount);
+
   // Ensure PWM values are within range
-  //leftMotorSpeed = constrain(leftMotorSpeed, 0, 255);
-  //rightMotorSpeed = constrain(rightMotorSpeed, 0, 255);
+  leftMotorSpeed = constrain(leftMotorSpeed, 0, 255);
+  rightMotorSpeed = constrain(rightMotorSpeed, 0, 255);
 
   // Set motor speeds
   analogWrite(enL, leftMotorSpeed);
   analogWrite(enR, rightMotorSpeed);
-  
+
   // Set initial motor directions
   digitalWrite(inL1, HIGH);
   digitalWrite(inL2, LOW);
   digitalWrite(inR1, LOW);
   digitalWrite(inR2, HIGH);
 
-
   // Print wheel speeds
   Serial.print("V right: ");
-  Serial.println(rightMotorSpeed); 
+  Serial.println(tmpleft); 
   Serial.print("V left: ");
-  Serial.println(leftMotorSpeed);
+  Serial.println(tmpright);
 
-  delay(1000);
+  // Check if the target encoder counts are reached
+  if (tmpright >= inner_target || tmpleft >= outer_target) {
+    stop();
+    while (true) {
+    }
+  }
+  
+  delay(100); 
 }
 
 void leftEnISRA() {
@@ -99,10 +98,19 @@ void leftEnISRA() {
 void leftEnISRB() {
   leftEnCount++;
 }
+
 void rightEnISRA() {
   rightEnCount++;
 }
 
 void rightEnISRB() {
   rightEnCount++;
+}
+
+void stop() {
+  // Turn off motors 
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, LOW);
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, LOW);
 }
