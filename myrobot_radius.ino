@@ -112,7 +112,7 @@ void loop() {
 //  Serial.println(v2);
 
   // Check if goal is reached
-  if (fabs(goalX - x) <= 0.05 && fabs(goalY - y) <= 0.05) {
+  if (fabs(goalX - x) <= 0.03 && fabs(goalY - y) <= 0.03) {
     stop();
 //    Serial.println("Goal reached!");
     while (1); // Stop further execution
