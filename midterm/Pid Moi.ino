@@ -3,6 +3,8 @@ int enL = 7; // enable the left motor driver, using PWM
 int inL1 = 8; // control direction of the left motor 
 int inL2 = 9;
 
+#define echo 53    //Echo pin
+#define trigger 52 //Trigger pin
 // Right Motor
 int enR = 12; 
 int inR1 = 10;
@@ -113,6 +115,9 @@ void read_sensor_values() {
     error = -3; 
     calculate_pid(error);}
 
+    else if ((sensor[0] == 1) && (sensor[1] == 1) && (sensor[2] == 1) && (sensor[3] == 1) && (sensor[4] == 1)){ //11111
+    stop();}
+      
     previousTime = currentTime; 
   }
   
@@ -155,4 +160,11 @@ void motor_control() {
 
   Serial.print("Left Speed: "); Serial.print(left_motor_speed);
   Serial.print(" | Right Speed: "); Serial.println(right_motor_speed);
+}
+
+void stop(){
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, HIGH);
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, HIGH);
 }
