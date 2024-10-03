@@ -1,0 +1,133 @@
+// Motor control pins
+int enL = 7; // enable the left motor driver, using PWM  
+int inL1 = 8; // control direction of the left motor 
+int inL2 = 9;
+
+const int trigPin = 50;
+const int echoPin = 51;
+// Right Motor
+int enR = 12; 
+int inR1 = 10;
+int inR2 = 11;
+
+// For Encoder
+int enLA = 2;  // left motor encoder
+int enLB = 3;
+int enRA = 18; // right motor encoder 
+int enRB = 19;
+float previousTime;
+
+const int thresholdDistance = 20;
+int initial_motor_speed = 55;
+
+void setup(){
+  Serial.begin(9600); // start serial communication at 9600bps
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  
+  previousTime = 0; 
+  pinMode(enL, OUTPUT);
+  pinMode(enR, OUTPUT);
+  pinMode(inL1, OUTPUT);
+  pinMode(inL2, OUTPUT);
+  pinMode(inR1, OUTPUT);
+  pinMode(inR2, OUTPUT);
+  
+  // Initialize motor direction (forward)
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, HIGH);
+}
+
+void loop() {
+  long duration, distance;
+  
+  // Send a 10us HIGH pulse to trigger the ultrasonic sensor
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  // Measure the duration of the echo pulse
+  duration = pulseIn(echoPin, HIGH);
+  
+  // Calculate distance in centimeters
+  distance = duration * 0.034 / 2;
+  
+  // Print the distance to the serial monitor (for debugging)
+  Serial.print("Distance: ");
+  Serial.print(distance);
+  Serial.println(" cm");
+
+  // Obstacle avoidance logic
+  if (distance > thresholdDistance) {
+    // Move forward if no obstacle is detected
+    moveForward();
+  } else {
+    // Stop and move backward and turn if obstacle is too close
+    avoidObstacle();
+  }
+  
+  // Add a short delay to stabilize readings
+  delay(100);
+}
+
+void avoidObstacle() {
+  // Stop the motors
+  stop();
+  delay(500);  // Pause for a moment
+
+  // Move backward
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, HIGH);
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, LOW);
+  delay(500);
+
+    // Stop and turn right
+  stop();
+  delay(500);
+  turnRight();
+  delay(500);
+}
+
+void stop(){
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, LOW);
+}
+
+// Function to turn the robot to the right
+void turnRight() {
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, LOW);
+}
+
+void motor_control() {
+
+  // Calculate the effective motor speed based on PID
+  int left_motor_speed = initial_motor_speed;
+  int right_motor_speed = initial_motor_speed;
+
+  // Constrain motor speeds
+  left_motor_speed = constrain(left_motor_speed, 0, 150);
+  right_motor_speed = constrain(right_motor_speed, 0, 150);
+
+  analogWrite(enL, left_motor_speed);  // Set left motor speed
+  analogWrite(enR, right_motor_speed); // Set right motor speed
+}
+
+void moveForward() {
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, HIGH);
+
+  motor_control();
+
+}
