@@ -3,8 +3,8 @@ int enL = 7; // enable the left motor driver, using PWM
 int inL1 = 8; // control direction of the left motor 
 int inL2 = 9;
 
-#define echo 53    //Echo pin
-#define trigger 52 //Trigger pin
+#define echo 51    //Echo pin
+#define trigger 50 //Trigger pin
 // Right Motor
 int enR = 12; 
 int inR1 = 10;
