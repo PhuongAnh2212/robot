@@ -162,9 +162,3 @@ void motor_control() {
   Serial.print(" | Right Speed: "); Serial.println(right_motor_speed);
 }
 
-void stop(){
-  digitalWrite(inL1, HIGH);
-  digitalWrite(inL2, HIGH);
-  digitalWrite(inR1, HIGH);
-  digitalWrite(inR2, HIGH);
-}
