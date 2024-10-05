@@ -1,0 +1,237 @@
+#include <Adafruit_BNO055.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <utility/imumaths.h>
+
+// Motor control pins
+int enL = 7; // enable the left motor driver, using PWM  
+int inL1 = 8; // control direction of the left motor 
+int inL2 = 9;
+
+#define echo 51    // Echo pin for ultrasonic sensor
+#define trigger 50 // Trigger pin for ultrasonic sensor
+
+// Right Motor
+int enR = 12; 
+int inR1 = 10;
+int inR2 = 11;
+
+// For Encoder
+int enLA = 2;  // left motor encoder
+int enLB = 3;
+int enRA = 18; // right motor encoder 
+int enRB = 19;
+
+// PID variables
+const float Kp = 4.5, Ki = 0.02, Kd = 0.5;
+const int K = 3;  // Adjust K for smooth response
+float previousTime = 0; 
+float error = 0, P = 0, I = 0, D = 0, PID_value = 0;
+float previous_error = 0;
+
+// Motor speed
+const int initial_motor_speed = 55;
+
+// Sensor array
+int sensor[5] = {0, 0, 0, 0, 0};
+
+// Encoder counts
+volatile int leftEnCount = 0;
+volatile int rightEnCount = 0;
+
+// IMU setup
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x29, &Wire);
+float targetOrientation = 0; // Target orientation for turning
+
+void setup() {
+    Serial.begin(9600);
+
+    pinMode(enL, OUTPUT);
+    pinMode(enR, OUTPUT);
+    pinMode(inL1, OUTPUT);
+    pinMode(inL2, OUTPUT);
+    pinMode(inR1, OUTPUT);
+    pinMode(inR2, OUTPUT);
+
+    // Initialize motor direction (forward)
+    digitalWrite(inL1, HIGH);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, LOW);
+    digitalWrite(inR2, HIGH);
+
+    // Initialize the IMU
+    if (!bno.begin()) {
+        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+        while (1);
+    }
+    bno.setExtCrystalUse(true);
+    
+    // Setup encoder interrupts
+    attachInterrupt(digitalPinToInterrupt(enLA), leftEnISRA, RISING);
+    attachInterrupt(digitalPinToInterrupt(enLB), leftEnISRB, RISING);
+    attachInterrupt(digitalPinToInterrupt(enRA), rightEnISRA, RISING);
+    attachInterrupt(digitalPinToInterrupt(enRB), rightEnISRB, RISING);
+}
+
+void loop() {
+    read_sensor_values();
+    calculate_pid();
+
+    // Check if all sensors detect 0
+    if (sensor[0] == 1 && sensor[1] == 1 && sensor[2] == 1 && sensor[3] == 1 && sensor[4] == 1) {
+        turnLeft90degree();
+        moveForward(2);
+        delay(500);
+        turnRight90degree();
+    } else {
+        motor_control(); // PID motor control
+    }
+}
+
+void read_sensor_values() {
+    for (int i = 0; i < 5; i++) {
+        sensor[i] = digitalRead(A0 + i); // Assume sensors are connected to A0 to A4
+    }
+}
+
+void motor_control() {
+    int left_motor_speed = initial_motor_speed + PID_value; // Adjust speed based on PID
+    int right_motor_speed = initial_motor_speed - PID_value;
+
+    // Constrain motor speeds
+    left_motor_speed = constrain(left_motor_speed, 0, 255);
+    right_motor_speed = constrain(right_motor_speed, 0, 255);
+
+    analogWrite(enL, left_motor_speed);  // Set left motor speed
+    analogWrite(enR, right_motor_speed); // Set right motor speed
+
+    Serial.print("Left Speed: "); Serial.print(left_motor_speed);
+    Serial.print(" | Right Speed: "); Serial.println(right_motor_speed);
+}
+
+void calculate_pid() {
+    float currentTime = millis();
+    float deltaTime = (currentTime - previousTime) / 1000.0; // Convert to seconds
+
+    // Calculate PID
+    P = error; // Proportional term
+    I += error * deltaTime; // Integral term
+    D = (error - previous_error) / deltaTime; // Derivative term
+
+    PID_value = Kp * P + Ki * I + Kd * D; // Combine all terms
+
+    previous_error = error; // Update previous error
+    previousTime = currentTime; // Update time
+}
+
+void turnLeft90degree() {
+    // Set direction for turning left
+    digitalWrite(inL1, LOW);
+    digitalWrite(inL2, LOW);  // Left motor reverse
+    digitalWrite(inR1, HIGH);
+    digitalWrite(inR2, LOW);   // Right motor forward
+
+    // Start turning
+    analogWrite(enL, 100);  // Speed for left motor
+    analogWrite(enR, 100);  // Speed for right motor
+
+    // Wait until the desired orientation is reached
+    while (true) {
+        sensors_event_t event;
+        bno.getEvent(&event);
+        float currentOrientation = event.orientation.x;  // Get current orientation
+
+        // Check if we've reached the target orientation (90 degrees turn)
+        if (abs(currentOrientation - targetOrientation) < 5) { // Allow a small tolerance
+            break; // Exit loop if target orientation is reached
+        }
+    }
+
+    // Stop the motors after the turn is complete
+    stop();
+    targetOrientation += 60; // Update target orientation for next turns
+}
+
+void turnRight90degree() {
+    // Set direction for turning right
+    digitalWrite(inL1, HIGH);
+    digitalWrite(inL2, LOW);  // Left motor forward
+    digitalWrite(inR1, LOW);
+    digitalWrite(inR2, LOW);   // Right motor reverse
+
+    // Start turning
+    analogWrite(enL, 100);  // Speed for left motor
+    analogWrite(enR, 100);  // Speed for right motor
+
+    // Wait until the desired orientation is reached
+    while (true) {
+        sensors_event_t event;
+        bno.getEvent(&event);
+        float currentOrientation = event.orientation.x;  // Get current orientation
+
+        // Check if we've reached the target orientation (90 degrees turn)
+        if (abs(currentOrientation - targetOrientation) < 5) { // Allow a small tolerance
+            break; // Exit loop if target orientation is reached
+        }
+    }
+
+    // Stop the motors after the turn is complete
+    stop();
+    targetOrientation -= 60; // Update target orientation for next turns
+}
+
+void moveForward(float distance) {
+    int targetCounts = calculateTargetCounts(distance);
+    leftEnCount = 0; // Reset encoder counts
+    rightEnCount = 0;
+
+    // Set direction for moving forward
+    digitalWrite(inL1, HIGH);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, LOW);
+    digitalWrite(inR2, HIGH);
+
+    // Start moving forward
+    analogWrite(enL, initial_motor_speed);  // Use initial speed
+    analogWrite(enR, initial_motor_speed);  // Use initial speed
+
+    // Wait until the robot has moved the target distance
+    while (leftEnCount < targetCounts && rightEnCount < targetCounts) {
+        // Optionally add obstacle checking code here
+    }
+
+    // Stop motors after moving forward
+    stop();
+}
+
+int calculateTargetCounts(float distance) {
+    const int encoderCountsPerRevolution = 500; // 1:50 encoder with 7 pulses per revolution
+    const float wheelDiameter = 0.0225 * 2; // Diameter of the wheel in meters
+    const float wheelCircumference = wheelDiameter * M_PI; // Wheel circumference
+    return (distance / wheelCircumference) * encoderCountsPerRevolution;
+}
+
+// Encoder ISR for left wheel
+void leftEnISRA() {
+    leftEnCount++;
+}
+
+void leftEnISRB() {
+    leftEnCount++;
+}
+
+// Encoder ISR for right wheel
+void rightEnISRA() {
+    rightEnCount++;
+}
+
+void rightEnISRB() {
+    rightEnCount++;
+}
+
+void stop(){
+    digitalWrite(inL1, LOW);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, LOW);
+    digitalWrite(inR2, LOW);
+}
