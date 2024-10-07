@@ -107,6 +107,44 @@ void loop() {
     turnLeft();
     delay(500);
   }
+    //Obstacle ở bên phải và trước mặt  
+    else if (rightDistance <= thresholdDistance && frontDistance <= thresholdDistance) {
+    stop();
+    delay(500);
+    
+    // Turn left to avoid the obstacle
+    turnLeft();
+    delay(500);
+    }
+
+    //Obstacle ở bên trái và trước mặt
+    else if (leftDistance <= thresholdDistance && frontDistance <= thresholdDistance) {
+    stop();
+    delay(500);
+    
+    // Turn left to avoid the obstacle
+    turnRight();
+    delay(500);
+    }
+
+    //Obstacle ở bên trái và bên phải => đi thẳng
+    else if (leftDistance <= thresholdDistance && rightDistance <= thresholdDistance) {
+    stop();
+    delay(500);
+    
+    moveForward();
+    delay(500);
+    }
+
+    else if (leftDistance <= thresholdDistance && rightDistance <= thresholdDistance && frontDistance <= thresholdDistance) {
+    stop();
+    delay(500);
+    
+    moveBackward();
+    delay(500);
+    }
+
+    
   // Add a short delay to stabilize readings
   delay(100);
 }
@@ -135,6 +173,16 @@ void stop(){
   digitalWrite(inL2, LOW);
   digitalWrite(inR1, LOW);
   digitalWrite(inR2, LOW);
+}
+
+void moveBackward(){
+    digitalWrite(inL1, LOW);
+    digitalWrite(inL2, HIGH);
+    digitalWrite(inR1, HIGH);
+    digitalWrite(inR2, LOW);
+
+  motor_control();
+
 }
 
 // Function to turn the robot to the right
