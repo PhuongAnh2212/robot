@@ -1,0 +1,58 @@
+#include <Wire.h>
+
+// Ultrasonic sensor pins
+const int frontTrigPin = 53;
+const int frontEchoPin = 52;
+const int leftTrigPin = 49;
+const int leftEchoPin = 48;
+const int rightTrigPin = 51;
+const int rightEchoPin = 50;
+
+void setup() {
+    Serial.begin(9600);
+    
+    // Set pins for ultrasonic sensors
+    pinMode(frontTrigPin, OUTPUT);
+    pinMode(frontEchoPin, INPUT);
+    
+    pinMode(leftTrigPin, OUTPUT);
+    pinMode(leftEchoPin, INPUT);
+    
+    pinMode(rightTrigPin, OUTPUT);
+    pinMode(rightEchoPin, INPUT);
+}
+
+void loop() {
+    // Test front sensor
+    long frontDistance = measureDistance(frontTrigPin, frontEchoPin);
+    Serial.print("Front Distance: ");
+    Serial.println(frontDistance);
+    delay(1000); // Wait 1 second before the next reading
+    
+    // Test left sensor
+    long leftDistance = measureDistance(leftTrigPin, leftEchoPin);
+    Serial.print("Left Distance: ");
+    Serial.println(leftDistance);
+    delay(1000); // Wait 1 second before the next reading
+    
+    // Test right sensor
+    long rightDistance = measureDistance(rightTrigPin, rightEchoPin);
+    Serial.print("Right Distance: ");
+    Serial.println(rightDistance);
+    delay(1000); // Wait 1 second before the next reading
+}
+
+long measureDistance(int trigPin, int echoPin) {
+    // Trigger the ultrasonic pulse
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    
+    // Measure the echo time
+    long duration = pulseIn(echoPin, HIGH);
+    
+    // Calculate distance (cm)
+    return duration * 0.034 / 2; // Speed of sound = 0.034 cm/µs
+}
