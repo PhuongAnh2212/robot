@@ -1,0 +1,468 @@
+#include <Adafruit_BNO055.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <HCSR04.h>
+
+// Motor control pins
+int enL = 7;
+int inL1 = 8;
+int inL2 = 9;
+
+int enR = 12;
+int inR1 = 10;
+int inR2 = 11;
+
+// Ultrasonic sensor pins
+const int frontTrigPin = 53;
+const int frontEchoPin = 52;
+const int leftTrigPin = 49;
+const int leftEchoPin = 48;
+const int rightTrigPin = 51;
+const int rightEchoPin = 50;
+
+
+
+const int obstacleThreshold = 25;  // cm
+
+// IMU setup
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x29, &Wire);
+float currentAngle = 0.0;
+
+const int enLA = 2;
+const int enLB = 3;
+const int enRA = 18;
+const int enRB = 19;
+
+
+// Encoder counts
+volatile long leftEnCount = 0;
+volatile long rightEnCount = 0;
+const int K = 30;
+
+
+HCSR04 frontSonar(53, 52);  //initialisation class HCSR04 (trig pin , echo pin)
+HCSR04 leftSonar(49, 48);
+HCSR04 rightSonar(51, 50);
+
+void setup() {
+  Serial.begin(9600);
+
+  // Initialize IMU
+  if (!bno.begin()) {
+    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    while (1)
+      ;
+  }
+  bno.setExtCrystalUse(true);
+
+  // Set motor pins as output
+  pinMode(enL, OUTPUT);
+  pinMode(enR, OUTPUT);
+  pinMode(inL1, OUTPUT);
+  pinMode(inL2, OUTPUT);
+  pinMode(inR1, OUTPUT);
+  pinMode(inR2, OUTPUT);
+
+  // Set ultrasonic pins
+  pinMode(frontTrigPin, OUTPUT);
+  pinMode(frontEchoPin, INPUT);
+  pinMode(leftTrigPin, OUTPUT);
+  pinMode(leftEchoPin, INPUT);
+
+  // Set encoder pins
+  pinMode(enLA, INPUT);
+  pinMode(enLB, INPUT);
+  pinMode(enRA, INPUT);
+  pinMode(enRB, INPUT);
+
+  // Attach interrupts for encoders
+  attachInterrupt(digitalPinToInterrupt(enLA), leftEnISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(enLB), leftEnISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(enRA), rightEnISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(enRB), rightEnISR, RISING);
+
+  stop();
+}
+
+void loop() {
+  // Move forward
+  moveForward(60);
+
+  //    Serial.print("Distance: ");
+  //    Serial.println(get_front_distance());
+  //
+  //    Serial.println(getCurrentYaw());
+
+
+  // Check for obstacles
+  if (isObstacleDetected()) {
+    Serial.println("obstacle detected");
+    turnRightDegrees(70);
+    delay(100);
+    stop();
+    delay(100);  // Small delay for stability
+    travelUntilLeftClear();
+    delay(500);
+    turnLeftDegrees(10);
+    delay(500);
+    moveForward_encoder(0.05);
+    delay(500);
+    travelUntilLeftClear();
+    delay(500);
+    turnRightDegrees(60);
+    delay(500);
+
+
+    //
+
+    //        travelUntilLeftClear();
+    //        stop();
+    //
+    //        turnLeftDegrees(15);
+    //        delay(100);
+    //
+    //        travelUntilLeftClear();
+    //        stop();
+  }
+}
+
+float get_front_distance() {
+  float distance = frontSonar.dist();
+  if (distance == 0.0) {
+    distance = 200.0;
+  }
+  return distance;
+}
+
+float get_left_distance() {
+  float distance = leftSonar.dist();
+  if (distance == 0.0) {
+    distance = 200.0;
+  }
+  return distance;
+}
+
+float get_right_distance() {
+  float distance = rightSonar.dist();
+  if (distance == 0.0) {
+    distance = 200.0;
+  }
+  return distance;
+}
+
+void stop() {
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, LOW);
+  delay(500);
+}
+
+void moveForward(int speed) {
+  leftEnCount = 0;
+  rightEnCount = 0;
+
+  analogWrite(enR, speed);
+  int motor_L_speed = speed + K * (rightEnCount - leftEnCount);
+  motor_L_speed = constrain(motor_L_speed, 0, 255);  // Ensure PWM is in valid range
+  analogWrite(enL, motor_L_speed);
+
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, HIGH);
+}
+
+long measureDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH);
+  return duration * 0.034 / 2;  // Convert to cm
+}
+
+bool isObstacleDetected() {
+  long distance = get_front_distance();
+  //    Serial.print("Distance: ");
+  //    Serial.println(distance); // Print distance for debugging
+  return distance < obstacleThreshold;  // Return true if obstacle is detected
+}
+//
+//void turnLeftDegrees(float degrees) {
+//  // Reset encoder counters
+//    leftEnCount = 0;
+//    rightEnCount = 0;
+//    digitalWrite(inL1, LOW);
+//    digitalWrite(inL2, LOW);
+//    digitalWrite(inR1, HIGH);
+//    digitalWrite(inR2, LOW);
+//
+//
+//    int speed = 60;
+//    const int turnWeight = 2;
+//    analogWrite(enL, speed);
+//
+//    int motor_R_speed = turnWeight * speed + K * (turnWeight * leftEnCount - rightEnCount);
+//    motor_R_speed = constrain(motor_R_speed, 0, 255); // Ensure PWM is in valid range
+//    analogWrite(enR, motor_R_speed);
+//    // Get the starting angle
+//    currentAngle = getCurrentYaw();
+//    Serial.println(currentAngle);
+//    float targetAngle = currentAngle + degrees; // Target angle is current + desired degrees
+//
+//
+//
+//    // Turn until the target angle is reached or timeout
+//    while (getCurrentYaw() < targetAngle && millis() - startTime < 1000) {
+//        // Print the current yaw angle
+//        Serial.print("Current Yaw Angle: ");
+//        Serial.println(getCurrentYaw());
+//    }
+//
+//    stop(); // Stop turning
+//    delay(500); // Short delay after turning
+//}
+
+void turnRight(int speed) {
+  leftEnCount = 0;
+  rightEnCount = 0;
+  const int turnWeight = 2;
+  analogWrite(enR, speed);
+
+  int motor_L_speed = turnWeight * speed + K * (turnWeight * rightEnCount - leftEnCount);
+  motor_L_speed = constrain(motor_L_speed, 0, 255);  // Ensure PWM is in valid range
+  analogWrite(enL, motor_L_speed);
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, LOW);
+}
+
+void turnRightDegrees(float degrees) {
+  // Reset encoder counters
+
+
+  // Get the starting angle
+  float startAngle = getCurrentYaw();
+  Serial.println(startAngle);
+  float targetAngle = startAngle + degrees;  // Target angle is current + desired degrees
+  //if targetAngle > 360 => then minus 360
+  if (targetAngle > 360) {
+    targetAngle = targetAngle - 360;
+    while ((getCurrentYaw() >= startAngle && getCurrentYaw() <= 360) || (getCurrentYaw() >= 0 && getCurrentYaw() < targetAngle)) {
+      turnRight(50);
+    }
+
+  } else {
+
+    // Turn until the target angle is reached or timeout
+    while (getCurrentYaw() < targetAngle) {
+      // Print the current yaw angle
+      //        Serial.print("Current Yaw Angle: ");
+      //        Serial.println(getCurrentYaw());
+      turnRight(50);
+    }
+  }
+  stop();
+}
+
+void turnLeft(int speed) {
+  leftEnCount = 0;
+  rightEnCount = 0;
+  const int turnWeight = 2;
+  analogWrite(enL, speed);
+
+  int motor_R_speed = turnWeight * speed + K * (turnWeight * rightEnCount - leftEnCount);
+  motor_R_speed = constrain(motor_R_speed, 0, 255);  // Ensure PWM is in valid range
+  analogWrite(enR, motor_R_speed);
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, HIGH);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, HIGH);
+}
+
+void turnLeftDegrees(float degrees) {
+  // Reset encoder counters
+
+
+  // Get the starting angle
+  float startAngle = getCurrentYaw();
+  Serial.println(startAngle);
+  float targetAngle = startAngle + degrees;  // Target angle is current + desired degrees
+  //if targetAngle > 360 => then minus 360
+  if (targetAngle > 360) {
+    targetAngle = targetAngle - 360;
+    while ((getCurrentYaw() >= startAngle && getCurrentYaw() <= 360) || (getCurrentYaw() >= 0 && getCurrentYaw() < targetAngle)) {
+      turnLeft(50);
+    }
+
+  } else {
+
+    // Turn until the target angle is reached or timeout
+    while (getCurrentYaw() < targetAngle) {
+      // Print the current yaw angle
+      //        Serial.print("Current Yaw Angle: ");
+      //        Serial.println(getCurrentYaw());
+      turnLeft(50);
+    }
+  }
+  stop();
+}
+
+
+float getCurrentYaw() {
+  sensors_event_t event;
+  bno.getEvent(&event);
+
+  return event.orientation.x;  // Normalize to [0, 360)
+}
+long measureLeftDistance() {
+  return get_left_distance();  // Measure distance from left sensor
+}
+long measureRightDistance() {
+  return get_right_distance();  // Measure distance from left sensor
+}
+
+
+void travelUntilLeftClear() {
+  while (measureLeftDistance() < obstacleThreshold) {
+    moveForward(60);  // Keep moving forward until left sensor is clear
+    checkLeftAndAdjust();
+    checkRightAndAdjust();
+    delay(100);  // Short delay for stability
+  }
+  stop();  // Stop once the left sensor is clear
+}
+
+void travelUntilRightClear() {
+  while (measureRightDistance() < obstacleThreshold) {
+    moveForward(60);  // Keep moving forward until left sensor is clear
+    checkLeftAndAdjust();
+    checkRightAndAdjust();
+    delay(100);  // Short delay for stability
+  }
+  stop();  // Stop once the left sensor is clear
+}
+
+
+// Encoder ISR for left motor
+void leftEnISR() {
+  leftEnCount++;
+}
+
+void rightEnISR() {
+  rightEnCount++;
+}
+
+void moveForward_encoder(float distance_en) {
+  int targetCounts = calculateTargetCounts(distance_en);
+  leftEnCount = 0;  // Reset encoder counts
+  rightEnCount = 0;
+
+  // Set direction for moving forward
+  digitalWrite(inL1, HIGH);
+  digitalWrite(inL2, LOW);
+  digitalWrite(inR1, LOW);
+  digitalWrite(inR2, HIGH);
+
+  // Start moving forward
+  analogWrite(enL, 70);  // Use initial speed
+  analogWrite(enR, 70);  // Use initial speed
+
+  // Wait until the robot has moved the target distance
+  while (leftEnCount < targetCounts && rightEnCount < targetCounts) {
+    // Optionally add obstacle checking code here
+  }
+
+  // Stop motors after moving forward
+  stop();
+}
+int calculateTargetCounts(float distance_en) {
+  const int encoderCountsPerRevolution = 500;             // 1:50 encoder with 7 pulses per revolution
+  const float wheelDiameter = 0.0225 * 2;                 // Diameter of the wheel in meters
+  const float wheelCircumference = wheelDiameter * M_PI;  // Wheel circumference
+  return (distance_en / wheelCircumference) * encoderCountsPerRevolution;
+}
+
+void checkLeftAndAdjust() {
+  long leftDistance = measureLeftDistance();  // Measure distance from the left sensor
+
+  // If the left sensor detects an obstacle and the robot is close
+  if (leftDistance < 15) {
+    // If too close, pull the robot back and adjust direction
+    Serial.println("Obstacle detected on the left! Pulling back and adjusting.");
+    pullBackAndAdjustLeft();
+  } else {
+    // If no obstacle or enough distance, push the robot forward
+    Serial.println("No obstacle on the left. Moving forward.");
+    moveForward(60);
+  }
+}
+
+// Function to pull the robot backward and turn right slightly to avoid obstacle
+void pullBackAndAdjustLeft() {
+  Serial.println("Pulling back and adjusting right...");
+
+  // Move the robot backward
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, HIGH);  // Reverse left motor
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, LOW);  // Reverse right motor
+
+  analogWrite(enL, 60);  // Set speed (adjust as necessary)
+  analogWrite(enR, 60);
+
+  delay(500);  // Move backward for 500ms (adjust as necessary)
+
+  stop();  // Stop the robot after pulling back
+
+  // Now adjust by turning right slightly to avoid the obstacle
+  turnRightDegrees(3);  // Turn right by 15 degrees
+  delay(500);           // Short delay before continuing
+
+  // Move forward again to avoid the obstacle
+  moveForward(60);
+}
+
+void checkRightAndAdjust() {
+  long rightDistance = measureRightDistance();  // Measure distance from the right sensor
+
+  // If the right sensor detects an obstacle and the robot is close
+  if (rightDistance < 15) {
+    // If too close, pull the robot back and adjust direction
+    Serial.println("Obstacle detected on the right! Pulling back and adjusting.");
+    pullBackAndAdjustRight();
+  } else {
+    // If no obstacle or enough distance, push the robot forward
+    Serial.println("No obstacle on the right. Moving forward.");
+    moveForward(60);
+  }
+}
+
+// Function to pull the robot backward and turn left slightly to avoid obstacle
+void pullBackAndAdjustRight() {
+  Serial.println("Pulling back and adjusting left...");
+
+  // Move the robot backward
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, HIGH);  // Reverse left motor
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, LOW);  // Reverse right motor
+
+  analogWrite(enL, 60);  // Set speed (adjust as necessary)
+  analogWrite(enR, 60);
+
+  delay(500);  // Move backward for 500ms (adjust as necessary)
+
+  stop();  // Stop the robot after pulling back
+
+  // Now adjust by turning left slightly to avoid the obstacle
+  turnLeftDegrees(3);  // Turn left by 15 degrees
+  delay(500);          // Short delay before continuing
+
+  // Move forward again to avoid the obstacle
+  moveForward(60);
+}
