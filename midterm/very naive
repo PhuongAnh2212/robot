@@ -1,0 +1,254 @@
+#include <Adafruit_BNO055.h>
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+
+// Motor control pins
+int enL = 7; 
+int inL1 = 8; 
+int inL2 = 9;
+
+int enR = 12; 
+int inR1 = 10;
+int inR2 = 11;
+
+// Ultrasonic sensor pins
+const int frontTrigPin = 53;
+const int frontEchoPin = 52;
+const int leftTrigPin = 49;
+const int leftEchoPin = 48;
+const int rightTrigPin = 51;
+const int rightEchoPin = 50;
+
+
+const int obstacleThreshold = 20; // cm
+
+// IMU setup
+Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x29, &Wire);
+float currentAngle = 0.0;
+
+const int enLA = 2;
+const int enLB = 3;
+const int enRA = 18;
+const int enRB = 19;
+
+
+// Encoder counts
+volatile long leftEnCount = 0;
+volatile long rightEnCount = 0;
+const int K = 30; 
+void setup() {
+    Serial.begin(9600);
+    
+    // Initialize IMU
+    if (!bno.begin()) {
+        Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+        while (1);
+    }
+    bno.setExtCrystalUse(true);
+    
+    // Set motor pins as output
+    pinMode(enL, OUTPUT);
+    pinMode(enR, OUTPUT);
+    pinMode(inL1, OUTPUT);
+    pinMode(inL2, OUTPUT);
+    pinMode(inR1, OUTPUT);
+    pinMode(inR2, OUTPUT);
+    
+    // Set ultrasonic pins
+    pinMode(frontTrigPin, OUTPUT);
+    pinMode(frontEchoPin, INPUT);
+    pinMode(leftTrigPin, OUTPUT);
+    pinMode(leftEchoPin, INPUT);
+
+    // Set encoder pins
+    pinMode(enLA, INPUT);
+    pinMode(enLB, INPUT);
+    pinMode(enRA, INPUT);
+    pinMode(enRB, INPUT);
+
+    // Attach interrupts for encoders
+    attachInterrupt(digitalPinToInterrupt(enLA), leftEnISR, RISING);
+    attachInterrupt(digitalPinToInterrupt(enLB), leftEnISR, RISING);
+    attachInterrupt(digitalPinToInterrupt(enRA), rightEnISR, RISING);
+    attachInterrupt(digitalPinToInterrupt(enRB), rightEnISR, RISING);
+
+    stop();
+}
+
+void loop() {
+    // Move forward
+    moveForward(60);
+
+    // Check for obstacles
+    if (isObstacleDetected()) {
+        stop(); // Stop if an obstacle is detected
+        Serial.println("Motors stopped."); // Debugging statement
+
+        delay(100); // Short delay before turning
+        turnRightDegrees(15);
+        delay(100);
+        travelUntilLeftClear();
+        stop();
+        turnLeftDegrees(15);
+    }
+    
+    delay(100); // Small delay for stability
+}
+
+void stop() {
+    digitalWrite(inL1, LOW);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, LOW);
+    digitalWrite(inR2, LOW);
+    delay(500);
+}
+
+void moveForward(int speed) {
+    leftEnCount = 0;
+    rightEnCount = 0;
+
+    analogWrite(enR, speed);
+    int motor_L_speed = speed + K * (rightEnCount - leftEnCount);
+    motor_L_speed = constrain(motor_L_speed, 0, 255); // Ensure PWM is in valid range
+    analogWrite(enL, motor_L_speed);
+    
+    digitalWrite(inL1, HIGH);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, LOW);
+    digitalWrite(inR2, HIGH);
+  
+}
+
+long measureDistance(int trigPin, int echoPin) {
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+    
+    long duration = pulseIn(echoPin, HIGH);
+    return duration * 0.034 / 2; // Convert to cm
+}
+
+bool isObstacleDetected() {
+    long distance = measureDistance(frontTrigPin, frontEchoPin);
+    Serial.print("Distance: ");
+    Serial.println(distance); // Print distance for debugging
+    return distance < obstacleThreshold; // Return true if obstacle is detected
+}
+
+void turnLeftDegrees(float degrees) {
+  // Reset encoder counters
+    leftEnCount = 0;
+    rightEnCount = 0;
+    digitalWrite(inL1, LOW);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, HIGH);
+    digitalWrite(inR2, LOW);
+
+    
+    int speed = 60;
+    const int turnWeight = 2;
+    analogWrite(enL, speed);
+
+    int motor_R_speed = turnWeight * speed + K * (turnWeight * leftEnCount - rightEnCount);
+    motor_R_speed = constrain(motor_R_speed, 0, 255); // Ensure PWM is in valid range
+    analogWrite(enR, motor_R_speed);
+    // Get the starting angle
+    currentAngle = getCurrentYaw();
+    Serial.println(currentAngle);
+    float targetAngle = currentAngle + degrees; // Target angle is current + desired degrees
+    
+    unsigned long startTime = millis();
+    
+    // Turn until the target angle is reached or timeout
+    while (getCurrentYaw() < targetAngle && millis() - startTime < 1000) {
+        // Print the current yaw angle
+        Serial.print("Current Yaw Angle: ");
+        Serial.println(getCurrentYaw());
+    }
+    
+    stop(); // Stop turning
+    delay(500); // Short delay after turning
+}
+
+void turnRightDegrees(float degrees) {
+    // Reset encoder counters
+    leftEnCount = 0;
+    rightEnCount = 0;
+    int speed = 100;
+    const int turnWeight = 2;
+    analogWrite(enR, speed);
+
+    int motor_L_speed = turnWeight * speed + K * (turnWeight * rightEnCount - leftEnCount);
+    motor_L_speed = constrain(motor_L_speed, 0, 255); // Ensure PWM is in valid range
+    analogWrite(enL, motor_L_speed);
+    
+    digitalWrite(inL1, HIGH);
+    digitalWrite(inL2, LOW);
+    digitalWrite(inR1, HIGH);
+    digitalWrite(inR2, LOW);
+ 
+    // Get the starting angle
+    currentAngle = getCurrentYaw();
+    Serial.println(currentAngle);
+    float targetAngle = currentAngle + degrees; // Target angle is current + desired degrees
+    
+    unsigned long startTime = millis();
+    
+    // Turn until the target angle is reached or timeout
+    while (getCurrentYaw() < targetAngle && millis() - startTime < 1000) {
+        // Print the current yaw angle
+        Serial.print("Current Yaw Angle: ");
+        Serial.println(getCurrentYaw());
+    }
+    
+    stop(); // Stop turning
+    delay(500); // Short delay after turning
+}
+
+float getCurrentYaw() {
+    sensors_event_t event;
+    bno.getEvent(&event);
+   
+    return fmod(event.orientation.x, 90); // Normalize to [0, 360)
+}
+long measureLeftDistance() {
+    return measureDistance(leftTrigPin, leftEchoPin); // Measure distance from left sensor
+}
+long measureRightDistance() {
+    return measureDistance(rightTrigPin, rightEchoPin); // Measure distance from left sensor
+}
+
+
+void travelUntilLeftClear() {
+    while (measureLeftDistance() < obstacleThreshold) {
+        moveForward(60); // Keep moving forward until left sensor is clear
+        delay(100); // Short delay for stability
+    }
+    stop(); // Stop once the left sensor is clear
+}
+
+void travelUntilRightClear() {
+    while (measureRightDistance() < obstacleThreshold) {
+        moveForward(60); // Keep moving forward until left sensor is clear
+        delay(100); // Short delay for stability
+        turnRightDegrees(20);
+
+    }
+    stop(); // Stop once the left sensor is clear
+}
+
+
+// Encoder ISR for left motor
+void leftEnISR() {
+    leftEnCount++;
+}
+
+void rightEnISR() {
+    rightEnCount++;
+}
+
+
+
+
