@@ -3,6 +3,9 @@
 #include <Adafruit_Sensor.h>
 #include <HCSR04.h>
 
+
+bool flag = true;
+
 // Ultrasonic sensor pins
 const int frontTrigPin = 53;
 const int frontEchoPin = 52;
@@ -16,8 +19,8 @@ HCSR04 rightSonar(51, 50); //initialisation class HCSR04 (trig pin , echo pin)
 float previousTime_sona = 0.0;
 float sampling_rate_sona = 50; //don vi la miliseconds
 
-const int obstacleThreshold = 25; // cm
-const int safeDistance = 20;
+const int obstacleThreshold = 20; // cm
+const int safeDistance = 10;
 
 volatile long leftEnCount = 0;
 volatile long rightEnCount = 0;
@@ -29,7 +32,6 @@ float Kp_sona = 0.6, Ki_sona = 0.8, Kd_sona = 3.0;
 float P_sona = 0, I_sona = 0, D_sona = 0;
 float previous_error_sona = 0;
 float PID_value_sona = 0;
-float setpoint = 20.0;
 
 bool isFirstTimeDetected = false;
 bool doneObstacle = false;
@@ -269,10 +271,12 @@ void hardcode_turnAround() {
 
 void checkAvoidObstacleState() {
 
-  Serial.print("fsfdgsgdg");
+  Serial.print("nao thay obs roi");
   // 1
-
-  turnRightDegrees(40);
+  stop();
+  delay(2000);
+  turnRightDegrees(35);
+//  turnRightTest(80);
   stop();  // Allow time for the turn
   Serial.println("meofmeosmeo");
   delay(1000);
@@ -280,8 +284,11 @@ void checkAvoidObstacleState() {
   travelUntilLeftClear();
   delay(300);
 
+  moveForward_encoder(0.4);
+
   //2
-  turnLeftDegrees(30);
+  turnLeftDegrees(15);
+//  turnLeftTest(90);
   Serial.println("escape left then read sona");
   delay(300);
   //  read_sona_values();
@@ -289,7 +296,8 @@ void checkAvoidObstacleState() {
   //  moveForward_encoder(0.7);
 
   // 3
-  turnLeftDegrees(60);
+//  turnLeftDegrees(60);
+turnLeftTest(10);
 
   travelUntilSeeLight();
   currentState = LineFollower;  // Return to normal state if no obstacles are detected
@@ -544,7 +552,7 @@ void pid_line_follow() {
 void turnRight(int speed) {
   leftEnCount = 0;
   rightEnCount = 0;
-  const int turnWeight = 3;
+  const int turnWeight = 2;
   analogWrite(enR, speed);
 
   int motor_L_speed = turnWeight * speed + K * (turnWeight * rightEnCount - leftEnCount);
@@ -552,14 +560,14 @@ void turnRight(int speed) {
   analogWrite(enL, motor_L_speed);
   digitalWrite(inL1, HIGH);
   digitalWrite(inL2, LOW);
-  digitalWrite(inR1, LOW);
-  digitalWrite(inR2, HIGH);
+  digitalWrite(inR1, HIGH);
+  digitalWrite(inR2, LOW);
 }
 
 void turnRightDegrees(float degrees) {
   // Reset encoder counters
 
-
+  bno.begin();
   // Get the starting angle
   float startAngle = getCurrentYaw();
   Serial.println("start angle");
@@ -601,14 +609,16 @@ void turnLeft(int speed) {
   motor_R_speed = constrain(motor_R_speed, 0, 255); // Ensure PWM is in valid range
 
   analogWrite(enR, motor_R_speed);
-  digitalWrite(inL1, HIGH);
-  digitalWrite(inL2, LOW);
+  digitalWrite(inL1, LOW);
+  digitalWrite(inL2, HIGH);
   digitalWrite(inR1, LOW);
   digitalWrite(inR2, HIGH);
 }
 
 void turnLeftDegrees(float degrees) {
+  
   // Reset encoder counters
+  bno.begin();
 
   Serial.println("ham re trai theo do");
   // Get the starting angle
@@ -641,6 +651,45 @@ void turnLeftDegrees(float degrees) {
   }
 }
 
+bool flag_left =true;
+void turnLeftTest(float angle){
+  bno.begin();
+  delay(1000);
+  while (flag_left){
+    float startAngle = getCurrentYaw();
+    Serial.print("startAngle re phai test");
+    Serial.println(startAngle);
+    if (startAngle+5 <= angle){
+      turnLeft(55);
+    }
+    else{
+      stop();
+      delay(500);
+      flag_left = false;
+    }
+  
+}
+}
+
+void turnRightTest(float angle){
+  bno.begin();
+  delay(1000);
+  while (flag){
+    float startAngle = getCurrentYaw();
+    Serial.print("startAngle re phai test");
+    Serial.println(startAngle);
+    if (startAngle <= angle){
+      turnRight(80);
+    }
+    else{
+      stop();
+      delay(500);
+      flag = false;
+    }
+  }
+}
+
+
 
 float getCurrentYaw() {
   sensors_event_t event;
@@ -651,21 +700,23 @@ float getCurrentYaw() {
 
 
 void travelUntilLeftClear() {
-  moveForward_encoder(0.2);
-  while (get_left_distance() < 25) {
+  
+  while (get_left_distance() < safeDistance) {
     moveForward(50); // Keep moving forward until left sensor is clear
     Serial.println("left clear");
 
     delay(100); // Short delay for stability
+    
   }
+  moveForward_encoder(0.3);
   stop(); // Stop once the left sensor is clear
 }
 
 
 void travelUntilLeftClear1() {
-  moveForward_encoder(0.6);
-  while (get_left_distance() < 25) {
-    moveForward(50); // Keep moving forward until left sensor is clear
+  moveForward_encoder(1.6);
+  while (get_left_distance() < safeDistance) {
+    moveForward(60); // Keep moving forward until left sensor is clear
     Serial.println("left clear");
 
     delay(100); // Short delay for stability
@@ -686,7 +737,7 @@ void travelUntilSeeLight() {
 
 
 void travelUntilRightClear() {
-  while (get_right_distance() < obstacleThreshold) {
+  while (get_right_distance() < safeDistance) {
     moveForward(60); // Keep moving forward until left sensor is clear
     moveForward_encoder(0.5);
     delay(80); // Short delay for stability
