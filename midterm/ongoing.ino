@@ -33,9 +33,6 @@ float P_sona = 0, I_sona = 0, D_sona = 0;
 float previous_error_sona = 0;
 float PID_value_sona = 0;
 
-bool isFirstTimeDetected = false;
-bool doneObstacle = false;
-bool hasPassedCase2 = false;
 //_______________________________
 // Motor control pins
 int enL = 7; // enable the left motor driver, using PWM
@@ -52,7 +49,6 @@ int inR2 = 11;
 // IMU setup
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x29, &Wire);
 float currentAngle = 0.0;
-
 
 // For Encoder
 int enLA = 2;  // left motor encoder
@@ -161,23 +157,12 @@ void loop() {
 
 //*********************************************
 void checkLineStatus() {
-    if (lineDetectedbyIRs()) {
-      stop();
-      delay(1000);
+  if (lineDetectedbyIRs()) {
+    stop();
+    delay(1000);
+    Serial.println("checkLineStatus");
+    currentState = LineFollower;
 
-      //     moveBackward_encoder(0.1);
-      //     moveForward_encoder(0.01);
-      //      if (lineDetectedbyIRs()) {
-      //        currentState = LineFollower; // Move to LineFollower state
-      //      }
-      //    }
-      //
-      //  }
-      //    else {
-      currentState = LineFollower;
-//      checkPIDState();
-      //    }
-  
   }
 }
 bool lineDetectedbyIRs() {
@@ -275,31 +260,30 @@ void checkAvoidObstacleState() {
   // 1
   stop();
   delay(2000);
+
   turnRightDegrees(35);
-//  turnRightTest(80);
-  stop();  // Allow time for the turn
+  stop();
   Serial.println("meofmeosmeo");
   delay(1000);
 
-  travelUntilLeftClear();
-  delay(300);
 
-  moveForward_encoder(0.4);
+  moveForward_encoder(0.6);
+  delay(300);
 
   //2
-  turnLeftDegrees(15);
-//  turnLeftTest(90);
+  turnLeftDegrees(20);
+
   Serial.println("escape left then read sona");
   delay(300);
-  //  read_sona_values();
-  travelUntilLeftClear1();
-  //  moveForward_encoder(0.7);
+
+  moveForward_encoder(2.0);
 
   // 3
-//  turnLeftDegrees(60);
-turnLeftTest(10);
+  turnLeftDegrees(50);
 
   travelUntilSeeLight();
+  Serial.println("see light trong vong loop obstacle");
+  
   currentState = LineFollower;  // Return to normal state if no obstacles are detected
 }
 
@@ -568,6 +552,7 @@ void turnRightDegrees(float degrees) {
   // Reset encoder counters
 
   bno.begin();
+  delay(1000);
   // Get the starting angle
   float startAngle = getCurrentYaw();
   Serial.println("start angle");
@@ -616,9 +601,10 @@ void turnLeft(int speed) {
 }
 
 void turnLeftDegrees(float degrees) {
-  
+
   // Reset encoder counters
   bno.begin();
+  delay(1000);
 
   Serial.println("ham re trai theo do");
   // Get the starting angle
@@ -651,37 +637,37 @@ void turnLeftDegrees(float degrees) {
   }
 }
 
-bool flag_left =true;
-void turnLeftTest(float angle){
+bool flag_left = true;
+void turnLeftTest(float angle) {
   bno.begin();
   delay(1000);
-  while (flag_left){
+  while (flag_left) {
     float startAngle = getCurrentYaw();
     Serial.print("startAngle re phai test");
     Serial.println(startAngle);
-    if (startAngle+5 <= angle){
+    if (startAngle + 5 <= angle) {
       turnLeft(55);
     }
-    else{
+    else {
       stop();
       delay(500);
       flag_left = false;
     }
-  
-}
+
+  }
 }
 
-void turnRightTest(float angle){
+void turnRightTest(float angle) {
   bno.begin();
   delay(1000);
-  while (flag){
+  while (flag) {
     float startAngle = getCurrentYaw();
     Serial.print("startAngle re phai test");
     Serial.println(startAngle);
-    if (startAngle <= angle){
+    if (startAngle <= angle) {
       turnRight(80);
     }
-    else{
+    else {
       stop();
       delay(500);
       flag = false;
@@ -700,13 +686,13 @@ float getCurrentYaw() {
 
 
 void travelUntilLeftClear() {
-  
+
   while (get_left_distance() < safeDistance) {
     moveForward(50); // Keep moving forward until left sensor is clear
     Serial.println("left clear");
 
     delay(100); // Short delay for stability
-    
+
   }
   moveForward_encoder(0.3);
   stop(); // Stop once the left sensor is clear
@@ -725,14 +711,17 @@ void travelUntilLeftClear1() {
 }
 
 void travelUntilSeeLight() {
-  //  moveForward_encoder(0.3);
-  while (!lineDetectedbyIRs()) {
+  if (!lineDetectedbyIRs()) {
     moveForward(60);
     Serial.println("no light");
     delay(100); // Short delay for stability
   }
-//  stop();
-  delay(100);
+  else {
+    //  stop();
+    Serial.println("see light trong check state");
+    delay(500);
+    currentState = LineFollower;
+  }
 }
 
 
